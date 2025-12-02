@@ -37,7 +37,7 @@ export class AppController {
         this.webhookSecret!,
       );
 
-      if (event.type === 'realtime.call.incoming') {
+      if (event.type === 'realtime.call.incoming' && event?.data?.call_id) {
         return this.phoneService.handleIncomingCall(event.data.call_id);
       }
 

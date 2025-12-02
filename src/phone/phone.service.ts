@@ -20,7 +20,7 @@ export class PhoneService {
   ) {
     const body: RealtimeSessionCreateRequest = {
       type: 'realtime',
-      model: opts?.model || 'gpt-realtime-2025-08-28',
+      model: opts?.model || 'gpt-realtime',
       output_modalities: ['audio'],
       audio: {
         input: {
@@ -35,10 +35,12 @@ export class PhoneService {
       },
       instructions:
         opts?.instructions ||
-        'Speak clearly and briefly. Confirm understanding before taking actions.',
+        `You are a helpful assistant for a restaurant, we always availability for bookings.
+         Speak clearly and briefly.
+          Confirm understanding before taking actions.
+          Your default language is English, unless a user uses a different language`,
     };
 
-    console.log('This is the id', callId);
     try {
       await axios.post(
         `https://api.openai.com/v1/realtime/calls/${callId}/accept`,
@@ -62,26 +64,16 @@ export class PhoneService {
     ws.on('open', () => {
       this.logger.log(`WS open for call ${callId}`);
 
-      // send your first instruction message
-      // const responseCreate: RealtimeSessionCreateRequest = {
-      //   type: 'realtime',
-      //   model: 'gpt-realtime-2025-08-28',
-      //   output_modalities: ['audio'],
-      //   audio: {
-      //     input: {
-      //       format: 'pcm16',
-      //       turn_detection: { type: 'semantic_vad', create_response: true },
-      //     },
-      //     output: {
-      //       format: 'g711_ulaw',
-      //       voice: 'alloy',
-      //       speed: 1.0,
-      //     },
-      //   },
-      //   instructions:
-      //     "Say to the user 'Thank you for calling, how can I help you'",
-      // };
-      // ws.send(JSON.stringify(responseCreate));
+      const responseCreate = {
+        type: 'response.create',
+        response: {
+          instructions: `Greet the user and ask them what they need assistance with.
+             Use English as a default language.
+             For booking cancellation, ask for booking reference and name only.
+             If a user is silent for more than 3 seconds, ask if they are still there or if they need help with anything`,
+        },
+      };
+      ws.send(JSON.stringify(responseCreate));
     });
 
     ws.on('message', (data) => {
@@ -118,6 +110,29 @@ export class PhoneService {
         ),
       );
     });
+  }
+
+  async terminateCall(callId: string) {
+    try {
+      await axios.post(
+        `https://api.openai.com/v1/realtime/calls/${callId}/hangup`,
+        null, // or {}
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json', // optional for empty body
+          },
+        },
+      );
+      return { ok: true };
+    } catch (e: any) {
+      console.error(
+        'Hangup failed',
+        e.response?.status,
+        e.response?.data ?? e.message,
+      );
+      return { ok: false, error: e.response?.data ?? e.message };
+    }
   }
 
   // Optional: expose a way to end a call/cleanup
