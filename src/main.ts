@@ -1,13 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { WsAdapter } from '@nestjs/platform-ws';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     rawBody: true,
   });
-
-  app.useWebSocketAdapter(new WsAdapter(app));
-  await app.listen(3000);
+  
+  // Use PORT from environment or default to 3000
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  
+  console.log(`Application is running on: http://localhost:${port}`);
 }
 bootstrap();
