@@ -1,1 +1,23 @@
-{ "build": { "builder": "NIXPACKS", "buildCommand": "rm -rf node_modules && npm install --include=dev && npm run build" }, "deploy": { "startCommand": "npm run start:prod" } } 
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm install --include=dev && npm run build"
+  },
+  "deploy": {
+    "startCommand": "npm run start:prod"
+  },
+  "nixpacksPlan": {
+    "phases": {
+      "setup": {
+        "cacheDirectories": []
+      },
+      "install": {
+        "cacheDirectories": []
+      },
+      "build": {
+        "cacheDirectories": []
+      }
+    }
+  }
+}
