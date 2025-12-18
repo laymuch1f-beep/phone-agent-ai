@@ -65,6 +65,7 @@ export class AppController {
     console.log('📱 CallSid:', body.CallSid);
     console.log('📱 From:', body.From);
     console.log('📱 To:', body.To);
+<<<<<<< HEAD
     console.log('📱 CallStatus:', body.CallStatus);
 
     // Get Railway public URL
@@ -80,11 +81,20 @@ export class AppController {
     
     // Clean the URL for WebSocket
     const cleanUrl = baseUrl.replace(/^https?:\/\//, '');
+=======
+
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 
+                   process.env.RAILWAY_STATIC_URL ||
+                   `${req.protocol}://${req.get('host')}`;
+>>>>>>> d380ad6c247d78137e947ad2384d0c7b47e6f5e5
     
     console.log('🌐 Base URL:', baseUrl);
     console.log('🔗 WebSocket URL: wss://' + cleanUrl + '/media-stream');
 
+<<<<<<< HEAD
     // Generate TwiML response
+=======
+>>>>>>> d380ad6c247d78137e947ad2384d0c7b47e6f5e5
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice">Hello! Connecting you to the AI assistant now.</Say>
@@ -108,13 +118,22 @@ export class AppController {
   async handleOpenAIWebhook(
     @Body() body: any,
   ): Promise<any> {
-    console.log('🤖 OpenAI webhook received');
+    console.log('🤖 OpenAI webhook received:', body.type);
     
+<<<<<<< HEAD
     // Simple response for OpenAI Realtime API
     if (body.type === 'realtime.call.incoming') {
       const callId = body.data?.call_id || body.data?.id;
       console.log(`📞 OpenAI call detected: ${callId}`);
       
+=======
+    // Handle OpenAI Realtime API webhook
+    if (body.type === 'realtime.call.incoming') {
+      const callId = body.data?.call_id || body.data?.id;
+      console.log(`📞 OpenAI call ID: ${callId}`);
+      
+      // Return acceptance response for OpenAI
+>>>>>>> d380ad6c247d78137e947ad2384d0c7b47e6f5e5
       return {
         control: {
           action: 'accept',
@@ -137,6 +156,7 @@ export class AppController {
   @Post('status-callback')
   @HttpCode(200)
   handleStatusCallback(@Body() body: any): any {
+<<<<<<< HEAD
     console.log('📊 Twilio status callback:', {
       callSid: body.CallSid,
       status: body.CallStatus,
@@ -203,5 +223,25 @@ export class AppController {
 
     res.type('text/xml');
     res.send(twiml);
+=======
+    console.log('📊 Twilio status:', body.CallStatus);
+    console.log('📱 CallSid:', body.CallSid);
+    
+    return { received: true };
+>>>>>>> d380ad6c247d78137e947ad2384d0c7b47e6f5e5
+  }
+
+  @Get('test-webhook')
+  testWebhook(): { message: string; timestamp: string; env: any } {
+    return {
+      message: 'Test endpoint working',
+      timestamp: new Date().toISOString(),
+      env: {
+        openaiKeySet: !!process.env.OPENAI_API_KEY,
+        twilioSidSet: !!process.env.TWILIO_ACCOUNT_SID,
+        port: process.env.PORT,
+        railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
+      }
+    };
   }
 }
