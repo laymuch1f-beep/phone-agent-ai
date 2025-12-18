@@ -2,8 +2,7 @@ FROM node:20-bullseye
 WORKDIR /usr/src/app 
 COPY package*.json ./ 
 RUN npm ci --include=dev 
-RUN chmod +x /usr/src/app/node_modules/.bin/nest 
 COPY . . 
-RUN npm run build 
+RUN npm install --include=dev "&&" chmod +x node_modules/.bin/nest "&&" npx nest build 
 EXPOSE 3000 
 CMD ["npm", "run", "start:prod"] 
