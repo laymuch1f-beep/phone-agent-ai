@@ -1,157 +1,285 @@
 "use strict";
-var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+Object.defineProperty(exports, "PhoneService", {
+    enumerable: true,
+    get: function() {
+        return PhoneService;
+    }
+});
+const _common = require("@nestjs/common");
+const _axios = /*#__PURE__*/ _interop_require_default(require("axios"));
+const _aiservice = require("../ai/ai.service");
+const _searchservice = require("../search/search.service");
+const _domainservice = require("../domain/domain.service");
+const _voiceservice = require("../voice/voice.service");
+function _interop_require_default(obj) {
+    return obj && obj.__esModule ? obj : {
+        default: obj
+    };
+}
+function _ts_decorate(decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
-    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    else for(var i = decorators.length - 1; i >= 0; i--)if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
-};
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-var PhoneService_1;
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.PhoneService = void 0;
-const common_1 = require("@nestjs/common");
-const ws_1 = __importDefault(require("ws"));
-const axios_1 = __importDefault(require("axios"));
-let PhoneService = PhoneService_1 = class PhoneService {
-    constructor() {
-        this.logger = new common_1.Logger(PhoneService_1.name);
-        this.apiKey = process.env.OPENAI_API_KEY;
-        this.sockets = new Map();
-    }
+}
+function _ts_metadata(k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+}
+// ⭐ ABSOLUTE BULLETPROOF IMPORT - No TypeScript issues
+let WebSocket;
+let PhoneService = class PhoneService {
     get authHeader() {
-        return { Authorization: `Bearer ${this.apiKey}` };
+        return {
+            Authorization: `Bearer ${this.apiKey}`
+        };
     }
     async acceptCall(callId, opts) {
+        // Get enhanced instructions using AI service
+        const enhancedInstructions = await this.getEnhancedInstructions(callId, opts?.instructions || `Hello! Thanks for calling. How can I help you today?`);
         const body = {
             type: 'realtime',
-            model: opts?.model || 'gpt-realtime',
-            output_modalities: ['audio'],
+            model: opts?.model || 'gpt-4-realtime-preview-2024-12-17',
+            output_modalities: [
+                'audio'
+            ],
             audio: {
                 input: {
                     format: 'pcm16',
-                    turn_detection: { type: 'semantic_vad', create_response: true },
+                    turn_detection: {
+                        type: 'semantic_vad',
+                        create_response: true
+                    }
                 },
                 output: {
                     format: 'g711_ulaw',
                     voice: 'coral',
-                    speed: 1.0,
-                },
+                    speed: 1.0
+                }
             },
-            instructions: opts?.instructions || `You are a helpful assistant for a restaurant, we always availability for bookings.
-         Speak clearly and briefly.
-          Confirm understanding before taking actions.
-          Your default language is English, unless a user uses a different language`,
+            instructions: enhancedInstructions
         };
         try {
-            const response = await axios_1.default.post(`https://api.openai.com/v1/realtime/calls/${callId}/accept`, body, {
+            const response = await _axios.default.post(`https://api.openai.com/v1/realtime/calls/${callId}/accept`, body, {
                 headers: {
                     ...this.authHeader,
                     'Content-Type': 'application/json'
                 }
             });
-            this.logger.log(`✅ Call ${callId} accepted successfully`);
+            this.activeInstructions.set(callId, enhancedInstructions);
+            this.logger.log(`✅ Call ${callId} accepted with AI-enhanced instructions`);
             return response.data;
-        }
-        catch (e) {
-            this.logger.error(`❌ Error accepting call ${callId}:`, e.message);
-            if (e.response) {
-                this.logger.error('Response data:', e.response.data);
-                this.logger.error('Response status:', e.response.status);
-            }
+        } catch (e) {
+            this.logger.error(`❌ Error:`, e.message);
             throw e;
         }
     }
+    /**
+   * Get AI-enhanced instructions with all capabilities
+   */ async getEnhancedInstructions(callId, baseInstructions) {
+        this.aiService.initializeConversation(callId, {
+            startTime: new Date(),
+            capabilities: [
+                'search',
+                'domain_check',
+                'voice_analysis'
+            ]
+        });
+        const instructions = `${baseInstructions}
+
+IMPORTANT CAPABILITIES:
+1. HUMAN-LIKE CONVERSATION: Engage naturally, show empathy, remember context from this conversation.
+2. INTERNET SEARCH: When asked about current events, weather, news, or unknown information, mention you can search for real-time data.
+3. DOMAIN ASSISTANCE: If caller asks about domain availability, registration, or suggestions, offer to check domain status.
+4. VOICE ANALYSIS: Continuously monitor conversation sentiment and intent.
+5. MEMORY: Remember all details shared in this conversation and reference them naturally.
+
+INSTRUCTIONS:
+- Be conversational and natural, like talking to a helpful friend
+- Ask clarifying questions when needed
+- Remember and reference information from earlier in the conversation
+- Offer relevant services based on caller needs
+- Provide accurate, helpful information
+- Be professional but warm and friendly
+- Handle multiple topics smoothly
+- Keep responses concise for phone conversation`;
+        return instructions;
+    }
     async connect(callId) {
         const url = `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(callId)}`;
-        const ws = new ws_1.default(url, {
-            headers: this.authHeader,
+        // ⭐ WebSocket is now guaranteed to be defined
+        const ws = new WebSocket(url, {
+            headers: this.authHeader
         });
         this.sockets.set(callId, ws);
-        ws.on('open', () => {
-            this.logger.log(`🔌 WS open for call ${callId}`);
-            const responseCreate = {
-                type: 'response.create',
-                response: {
-                    instructions: `Greet the user and ask them what they need assistance with.
-             Use English as a default language.
-             For booking cancellation, ask for booking reference and name only.
-             If a user is silent for more than 3 seconds, ask if they are still there or if they need help with anything`,
-                },
-            };
-            ws.send(JSON.stringify(responseCreate));
+        ws.on('open', ()=>{
+            this.logger.log(`✅ WebSocket OPEN for ${callId}`);
+        // No greeting needed - OpenAI handles it
         });
-        ws.on('message', (data) => {
-            try {
-                const text = data.toString();
-                this.logger.debug(`📨 WS message (${callId}): ${text}`);
-            }
-            catch (e) {
-                this.logger.error(`Failed to parse WS message for ${callId}`, e);
-            }
+        ws.on('message', (data)=>{
+            this.logger.debug(`📨 Message from ${callId}:`, data.toString());
         });
-        ws.on('close', (code, reason) => {
-            this.logger.log(`🔌 WS closed for ${callId}: code=${code} reason=${reason.toString()}`);
+        ws.on('close', ()=>{
+            this.logger.log(`🔌 WebSocket CLOSED for ${callId}`);
             this.sockets.delete(callId);
         });
-        ws.on('error', (err) => {
-            this.logger.error(`❌ WS error for ${callId}: ${err.message}`);
+        ws.on('error', (err)=>{
+            this.logger.error(`❌ WebSocket ERROR:`, err.message);
         });
     }
     async handleIncomingCall(callId) {
-        this.logger.log(`📞 Handling incoming call: ${callId}`);
-        try {
-            await this.acceptCall(callId);
-            setImmediate(() => {
-                this.connect(callId).catch((e) => this.logger.error(`❌ Failed to connect WS for ${callId}: ${e.message}`));
-            });
-            return {
-                control: {
-                    action: 'accept',
-                    parameters: {
-                        voice: 'coral',
-                        instructions: `You are a helpful assistant for a restaurant, we always availability for bookings.
-               Speak clearly and briefly.
-                Confirm understanding before taking actions.
-                Your default language is English, unless a user uses a different language`,
-                        turn_detection: {
-                            type: 'server_vad',
-                        }
+        this.logger.log(`📞 Handling call: ${callId}`);
+        // Initialize AI conversation memory
+        this.aiService.initializeConversation(callId, {
+            startTime: new Date(),
+            callId,
+            features: {
+                searchEnabled: true,
+                domainCheckEnabled: true,
+                voiceAnalysisEnabled: true,
+                memoryEnabled: true
+            }
+        });
+        await this.acceptCall(callId);
+        setImmediate(()=>{
+            this.connect(callId).catch((e)=>this.logger.error(`❌ WebSocket failed:`, e.message));
+        });
+        return {
+            control: {
+                action: 'accept',
+                parameters: {
+                    voice: 'coral',
+                    instructions: await this.getEnhancedInstructions(callId, `Welcome! I'm an AI assistant with advanced capabilities. I can help you search for information, check domain availability, and more. How can I assist you today?`),
+                    turn_detection: {
+                        type: 'server_vad'
                     }
                 }
-            };
+            }
+        };
+    }
+    /**
+   * Search for information during call
+   */ async searchDuringCall(callId, query) {
+        this.logger.log(`🔍 Searching for: "${query}" during call ${callId}`);
+        const results = await this.searchService.getRelevantInfo(query, 3);
+        // Update conversation context
+        this.aiService.updateContext(callId, {
+            lastSearch: query,
+            searchResults: results,
+            searchTime: new Date()
+        });
+        return results;
+    }
+    /**
+   * Check domain during call
+   */ async checkDomainDuringCall(callId, domain) {
+        this.logger.log(`🌐 Checking domain: "${domain}" during call ${callId}`);
+        const summary = await this.domainService.getDomainSummary(domain);
+        // Update conversation context
+        this.aiService.updateContext(callId, {
+            lastDomainCheck: domain,
+            domainStatus: summary,
+            domainCheckTime: new Date()
+        });
+        return summary;
+    }
+    /**
+   * Analyze voice during call
+   */ async analyzeVoiceDuringCall(callId, transcription, audioMetrics) {
+        this.logger.log(`🎤 Analyzing voice for call ${callId}`);
+        const analysis = this.voiceService.analyzeSpeech(transcription, audioMetrics);
+        const recommendations = this.voiceService.getVoiceRecommendations(analysis);
+        // Update conversation context
+        this.aiService.updateContext(callId, {
+            lastAnalysis: analysis,
+            voiceRecommendations: recommendations,
+            sentiment: analysis.sentiment,
+            intent: analysis.intent,
+            analysisTime: new Date()
+        });
+        this.logger.log(`Analysis - Intent: ${analysis.intent}, Sentiment: ${analysis.sentiment}`);
+        if (recommendations.length > 0) {
+            this.logger.log(`Recommendations: ${recommendations.join(', ')}`);
         }
-        catch (error) {
-            this.logger.error(`❌ Failed to handle call ${callId}:`, error);
-            throw error;
-        }
+        return JSON.stringify(analysis, null, 2);
+    }
+    /**
+   * Get call summary
+   */ getCallSummary(callId) {
+        const memory = this.aiService.getMemory(callId);
+        if (!memory) return 'No call data available';
+        const summary = this.aiService.getConversationSummary(callId);
+        const duration = new Date().getTime() - memory.startTime.getTime();
+        const durationMinutes = (duration / 1000 / 60).toFixed(2);
+        return `
+=== CALL SUMMARY ===
+Call ID: ${callId}
+Duration: ${durationMinutes} minutes
+Started: ${memory.startTime.toISOString()}
+
+CONVERSATION:
+${summary}
+
+CONTEXT:
+${JSON.stringify(memory.context, null, 2)}
+    `;
     }
     async terminateCall(callId) {
         try {
-            await axios_1.default.post(`https://api.openai.com/v1/realtime/calls/${callId}/hangup`, null, {
+            // Generate call summary
+            const summary = this.getCallSummary(callId);
+            this.logger.log(`\n${summary}`);
+            // Clean up conversation memory
+            this.aiService.clearMemory(callId);
+            this.activeInstructions.delete(callId);
+            await _axios.default.post(`https://api.openai.com/v1/realtime/calls/${callId}/hangup`, null, {
                 headers: {
-                    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-                    'Content-Type': 'application/json',
-                },
+                    Authorization: `Bearer ${this.apiKey}`,
+                    'Content-Type': 'application/json'
+                }
             });
             this.logger.log(`✅ Call ${callId} terminated`);
-            return { ok: true };
-        }
-        catch (e) {
-            this.logger.error(`❌ Hangup failed for ${callId}:`, e.response?.status, e.response?.data ?? e.message);
-            return { ok: false, error: e.response?.data ?? e.message };
+            return {
+                ok: true,
+                summary
+            };
+        } catch (e) {
+            this.logger.error(`❌ Hangup failed:`, e.message);
+            return {
+                ok: false,
+                error: e.message
+            };
         }
     }
     close(callId) {
         const sock = this.sockets.get(callId);
-        if (sock && sock.readyState === ws_1.default.OPEN)
-            sock.close(1000, 'done');
+        if (sock && sock.readyState === 1) sock.close(1000, 'done');
         this.sockets.delete(callId);
     }
+    constructor(aiService, searchService, domainService, voiceService){
+        this.aiService = aiService;
+        this.searchService = searchService;
+        this.domainService = domainService;
+        this.voiceService = voiceService;
+        this.logger = new _common.Logger(PhoneService.name);
+        this.apiKey = process.env.OPENAI_API_KEY;
+        this.sockets = new Map();
+        this.activeInstructions = new Map();
+        // ⭐ Dynamically require at runtime
+        WebSocket = require('ws');
+    }
 };
-exports.PhoneService = PhoneService;
-exports.PhoneService = PhoneService = PhoneService_1 = __decorate([
-    (0, common_1.Injectable)()
+PhoneService = _ts_decorate([
+    (0, _common.Injectable)(),
+    _ts_metadata("design:type", Function),
+    _ts_metadata("design:paramtypes", [
+        typeof _aiservice.AIService === "undefined" ? Object : _aiservice.AIService,
+        typeof _searchservice.InternetSearchService === "undefined" ? Object : _searchservice.InternetSearchService,
+        typeof _domainservice.DomainService === "undefined" ? Object : _domainservice.DomainService,
+        typeof _voiceservice.VoiceRecognitionService === "undefined" ? Object : _voiceservice.VoiceRecognitionService
+    ])
 ], PhoneService);
+
 //# sourceMappingURL=phone.service.js.map

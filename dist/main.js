@@ -1,15 +1,19 @@
 "use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-const core_1 = require("@nestjs/core");
-const app_module_1 = require("./app.module");
+Object.defineProperty(exports, "__esModule", {
+    value: true
+});
+const _core = require("@nestjs/core");
+const _appmodule = require("./app.module");
 async function bootstrap() {
-    const app = await core_1.NestFactory.create(app_module_1.AppModule, {
-        rawBody: true,
+    console.log('🚀 Starting Phone Agent application...');
+    const app = await _core.NestFactory.create(_appmodule.AppModule, {
+        rawBody: true
     });
-    const port = process.env.PORT || 3000;
+    const port = process.env.PORT || 8080;
     await app.listen(port, '0.0.0.0');
-    console.log(`🚀 Application is running on port: ${port}`);
-    console.log(`🌐 Accessible at: http://0.0.0.0:${port}`);
+    console.log(`✅ Application running on port: ${port}`);
+    console.log(`🌐 Health: http://0.0.0.0:${port}/`);
 }
 bootstrap();
+
 //# sourceMappingURL=main.js.map
