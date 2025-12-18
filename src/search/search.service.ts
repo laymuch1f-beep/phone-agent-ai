@@ -36,9 +36,17 @@ export class InternetSearchService {
       // Use Google Custom Search API (if configured) or fallback to SerpAPI
       let results: SearchResult[] = [];
 
-      if (this.searchEngine === 'google' && this.apiKey) {
+      if (this.searchEngine === 'google') {
+        if (!this.apiKey || !process.env.GOOGLE_SEARCH_ENGINE_ID) {
+          this.logger.warn('Google search selected but SEARCH_API_KEY or GOOGLE_SEARCH_ENGINE_ID is missing');
+          return [];
+        }
         results = await this.googleSearch(query, maxResults);
       } else if (this.searchEngine === 'serpapi') {
+        if (!this.apiKey) {
+          this.logger.warn('SerpAPI selected but SEARCH_API_KEY is missing');
+          return [];
+        }
         results = await this.serpApiSearch(query, maxResults);
       } else {
         this.logger.warn('No search API configured');
@@ -71,13 +79,18 @@ export class InternetSearchService {
       num: Math.min(maxResults, 10),
     };
 
-    const response = await axios.get(url, { params });
-    return (response.data.items || []).map((item: any) => ({
-      title: item.title,
-      url: item.link,
-      snippet: item.snippet,
-      source: 'Google',
-    }));
+    try {
+      const response = await axios.get(url, { params });
+      return (response.data.items || []).map((item: any) => ({
+        title: item.title,
+        url: item.link,
+        snippet: item.snippet,
+        source: 'Google',
+      }));
+    } catch (error: any) {
+      this.logger.error(`Google search API error: ${error?.response?.status} ${error?.response?.statusText}`, error?.response?.data || error.message);
+      throw error;
+    }
   }
 
   /**
@@ -91,13 +104,18 @@ export class InternetSearchService {
       num: maxResults,
     };
 
-    const response = await axios.get(url, { params });
-    return (response.data.organic_results || []).slice(0, maxResults).map((result: any) => ({
-      title: result.title,
-      url: result.link,
-      snippet: result.snippet,
-      source: 'SerpAPI',
-    }));
+    try {
+      const response = await axios.get(url, { params });
+      return (response.data.organic_results || []).slice(0, maxResults).map((result: any) => ({
+        title: result.title,
+        url: result.link,
+        snippet: result.snippet,
+        source: 'SerpAPI',
+      }));
+    } catch (error: any) {
+      this.logger.error(`SerpAPI error: ${error?.response?.status} ${error?.response?.statusText}`, error?.response?.data || error.message);
+      throw error;
+    }
   }
 
   /**

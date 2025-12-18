@@ -150,9 +150,15 @@ export class AppController {
 
   @Post('/voice/analyze')
   @HttpCode(200)
-  async analyzeVoice(@Body() body: { transcription: string; audioMetrics?: any }) {
-    console.log(`🎤 Voice analysis - Transcription: ${body.transcription.substring(0, 50)}...`);
-    const analysis = this.voiceService.analyzeSpeech(body.transcription, body.audioMetrics);
+  async analyzeVoice(@Body() body: { transcription?: string; audioMetrics?: any }) {
+    const transcription = typeof body.transcription === 'string' ? body.transcription : undefined;
+    if (!transcription || transcription.trim().length === 0) {
+      throw new BadRequestException('`transcription` (string) is required in the request body');
+    }
+
+    console.log(`🎤 Voice analysis - Transcription: ${transcription.substring(0, 50)}...`);
+
+    const analysis = this.voiceService.analyzeSpeech(transcription, body.audioMetrics);
     const report = this.voiceService.generateQualityReport(analysis);
     return {
       analysis,

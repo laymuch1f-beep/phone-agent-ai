@@ -95,6 +95,16 @@ export class DomainService {
         `${this.whoisApi}?apiKey=${this.domainApi}&domainName=${domain}`,
       );
 
+      if (!response.data || !response.data.result) {
+        this.logger.warn(`⚠️ WHOIS API returned unexpected payload for ${domain}: ${JSON.stringify(response.data)}`);
+        return {
+          domain,
+          available: false,
+          registered: true,
+          registrar: 'Unknown',
+        };
+      }
+
       const available = response.data.result?.registrar === 'Not found';
 
       return {
@@ -104,8 +114,8 @@ export class DomainService {
         registrar: response.data.result?.registrar,
         expirationDate: response.data.result?.expirationDate,
       };
-    } catch (error) {
-      this.logger.warn(`⚠️ WHOIS lookup failed for ${domain}`);
+    } catch (error: any) {
+      this.logger.warn(`⚠️ WHOIS lookup failed for ${domain}: ${error?.message || error}`);
       return {
         domain,
         available: false,
