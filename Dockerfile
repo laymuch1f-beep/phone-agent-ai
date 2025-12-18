@@ -2,8 +2,9 @@ FROM node:20-bullseye
 WORKDIR /usr/src/app 
 COPY package*.json ./ 
 RUN npm ci --include=dev 
-RUN rm -rf dist   # Only clean dist, NOT node_modules
+RUN chmod +x node_modules/.bin/nest 
+RUN rm -rf dist 
 COPY . . 
-RUN npm run build   # Use npm run build instead of npx nest
+RUN npm run build 
 EXPOSE 3000 
 CMD ["npm", "run", "start:prod"] 
