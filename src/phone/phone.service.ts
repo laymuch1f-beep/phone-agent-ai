@@ -30,6 +30,8 @@ export class PhoneService {
   }
 
   async acceptCall(callId: string, opts?: { instructions?: string; model?: string }) {
+    console.log('📞 [PhoneService.acceptCall] Starting...', { callId });
+    
     // Get enhanced instructions using AI service
     const enhancedInstructions = await this.getEnhancedInstructions(
       callId,
@@ -48,16 +50,18 @@ export class PhoneService {
     };
 
     try {
+      console.log('📞 [PhoneService.acceptCall] Sending to OpenAI API...');
       const response = await axios.post(
         `https://api.openai.com/v1/realtime/calls/${callId}/accept`,
         body,
         { headers: { ...this.authHeader, 'Content-Type': 'application/json' } },
       );
       this.activeInstructions.set(callId, enhancedInstructions);
-      this.logger.log(`✅ Call ${callId} accepted with AI-enhanced instructions`);
+      console.log('✅ [PhoneService.acceptCall] Call accepted successfully');
       return response.data;
     } catch (e: any) {
-      this.logger.error(`❌ Error:`, e.message);
+      console.error('❌ [PhoneService.acceptCall] Error:', e.message);
+      console.error('❌ [PhoneService.acceptCall] Full error:', e);
       throw e;
     }
   }
@@ -66,6 +70,8 @@ export class PhoneService {
    * Get AI-enhanced instructions with all capabilities
    */
   private async getEnhancedInstructions(callId: string, baseInstructions: string): Promise<string> {
+    console.log('🤖 [PhoneService.getEnhancedInstructions] Creating instructions...');
+    
     this.aiService.initializeConversation(callId, {
       startTime: new Date(),
       capabilities: ['search', 'domain_check', 'voice_analysis'],
@@ -90,10 +96,12 @@ INSTRUCTIONS:
 - Handle multiple topics smoothly
 - Keep responses concise for phone conversation`;
 
+    console.log('✅ [PhoneService.getEnhancedInstructions] Instructions created');
     return instructions;
   }
 
   async connect(callId: string) {
+    console.log('🔗 [PhoneService.connect] Connecting WebSocket...', { callId });
     const url = `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(callId)}`;
 
     // ⭐ WebSocket is now guaranteed to be defined
@@ -104,67 +112,83 @@ INSTRUCTIONS:
     this.sockets.set(callId, ws);
 
     ws.on('open', () => {
-      this.logger.log(`✅ WebSocket OPEN for ${callId}`);
+      console.log('✅ [PhoneService.connect] WebSocket OPEN for', callId);
       // No greeting needed - OpenAI handles it
     });
 
     ws.on('message', (data: any) => {
-      this.logger.debug(`📨 Message from ${callId}:`, data.toString());
+      console.log('📨 [PhoneService.connect] Message from', callId, ':', data.toString());
     });
 
     ws.on('close', () => {
-      this.logger.log(`🔌 WebSocket CLOSED for ${callId}`);
+      console.log('🔌 [PhoneService.connect] WebSocket CLOSED for', callId);
       this.sockets.delete(callId);
     });
 
     ws.on('error', (err: any) => {
-      this.logger.error(`❌ WebSocket ERROR:`, err.message);
+      console.error('❌ [PhoneService.connect] WebSocket ERROR:', err.message);
+      console.error('❌ [PhoneService.connect] Error details:', err);
     });
   }
 
   async handleIncomingCall(callId: string) {
-    this.logger.log(`📞 Handling call: ${callId}`);
+    console.log('📱 [PhoneService.handleIncomingCall] STARTED for call:', callId);
     
-    // Initialize AI conversation memory
-    this.aiService.initializeConversation(callId, {
-      startTime: new Date(),
-      callId,
-      features: {
-        searchEnabled: true,
-        domainCheckEnabled: true,
-        voiceAnalysisEnabled: true,
-        memoryEnabled: true,
-      },
-    });
-    
-    await this.acceptCall(callId);
-    
-    setImmediate(() => {
-      this.connect(callId).catch((e: any) =>
-        this.logger.error(`❌ WebSocket failed:`, e.message)
-      );
-    });
+    try {
+      // Initialize AI conversation memory
+      console.log('🤖 [PhoneService.handleIncomingCall] Initializing AI conversation...');
+      this.aiService.initializeConversation(callId, {
+        startTime: new Date(),
+        callId,
+        features: {
+          searchEnabled: true,
+          domainCheckEnabled: true,
+          voiceAnalysisEnabled: true,
+          memoryEnabled: true,
+        },
+      });
+      
+      console.log('📞 [PhoneService.handleIncomingCall] Accepting call...');
+      await this.acceptCall(callId);
+      
+      console.log('🔗 [PhoneService.handleIncomingCall] Setting up WebSocket...');
+      setImmediate(() => {
+        this.connect(callId).catch((e: any) => {
+          console.error('❌ [PhoneService.handleIncomingCall] WebSocket failed:', e.message);
+          console.error('❌ [PhoneService.handleIncomingCall] WebSocket error stack:', e.stack);
+        });
+      });
 
-    return {
-      control: {
-        action: 'accept',
-        parameters: {
-          voice: 'coral',
-          instructions: await this.getEnhancedInstructions(
-            callId,
-            `Welcome! I'm an AI assistant with advanced capabilities. I can help you search for information, check domain availability, and more. How can I assist you today?`,
-          ),
-          turn_detection: { type: 'server_vad' }
+      const result = {
+        control: {
+          action: 'accept',
+          parameters: {
+            voice: 'coral',
+            instructions: await this.getEnhancedInstructions(
+              callId,
+              `Welcome! I'm an AI assistant with advanced capabilities. I can help you search for information, check domain availability, and more. How can I assist you today?`,
+            ),
+            turn_detection: { type: 'server_vad' }
+          }
         }
-      }
-    };
+      };
+
+      console.log('✅ [PhoneService.handleIncomingCall] COMPLETED successfully');
+      console.log('✅ [PhoneService.handleIncomingCall] Returning:', result);
+      return result;
+      
+    } catch (error) {
+      console.error('💥 [PhoneService.handleIncomingCall] ERROR:', error.message);
+      console.error('💥 [PhoneService.handleIncomingCall] Stack trace:', error.stack);
+      throw error;
+    }
   }
 
   /**
    * Search for information during call
    */
   async searchDuringCall(callId: string, query: string): Promise<string> {
-    this.logger.log(`🔍 Searching for: "${query}" during call ${callId}`);
+    console.log(`🔍 [PhoneService.searchDuringCall] Searching for: "${query}" during call ${callId}`);
     
     const results = await this.searchService.getRelevantInfo(query, 3);
     
@@ -182,7 +206,7 @@ INSTRUCTIONS:
    * Check domain during call
    */
   async checkDomainDuringCall(callId: string, domain: string): Promise<string> {
-    this.logger.log(`🌐 Checking domain: "${domain}" during call ${callId}`);
+    console.log(`🌐 [PhoneService.checkDomainDuringCall] Checking domain: "${domain}" during call ${callId}`);
     
     const summary = await this.domainService.getDomainSummary(domain);
     
@@ -204,7 +228,7 @@ INSTRUCTIONS:
     transcription: string,
     audioMetrics?: any,
   ): Promise<string> {
-    this.logger.log(`🎤 Analyzing voice for call ${callId}`);
+    console.log(`🎤 [PhoneService.analyzeVoiceDuringCall] Analyzing voice for call ${callId}`);
     
     const analysis = this.voiceService.analyzeSpeech(transcription, audioMetrics);
     const recommendations = this.voiceService.getVoiceRecommendations(analysis);
@@ -218,10 +242,10 @@ INSTRUCTIONS:
       analysisTime: new Date(),
     });
 
-    this.logger.log(`Analysis - Intent: ${analysis.intent}, Sentiment: ${analysis.sentiment}`);
+    console.log(`🎤 [PhoneService.analyzeVoiceDuringCall] Analysis - Intent: ${analysis.intent}, Sentiment: ${analysis.sentiment}`);
     
     if (recommendations.length > 0) {
-      this.logger.log(`Recommendations: ${recommendations.join(', ')}`);
+      console.log(`🎤 [PhoneService.analyzeVoiceDuringCall] Recommendations: ${recommendations.join(', ')}`);
     }
 
     return JSON.stringify(analysis, null, 2);
@@ -256,7 +280,7 @@ ${JSON.stringify(memory.context, null, 2)}
     try {
       // Generate call summary
       const summary = this.getCallSummary(callId);
-      this.logger.log(`\n${summary}`);
+      console.log(`\n${summary}`);
 
       // Clean up conversation memory
       this.aiService.clearMemory(callId);
@@ -267,10 +291,10 @@ ${JSON.stringify(memory.context, null, 2)}
         null,
         { headers: { Authorization: `Bearer ${this.apiKey}`, 'Content-Type': 'application/json' } },
       );
-      this.logger.log(`✅ Call ${callId} terminated`);
+      console.log(`✅ [PhoneService.terminateCall] Call ${callId} terminated`);
       return { ok: true, summary };
     } catch (e: any) {
-      this.logger.error(`❌ Hangup failed:`, e.message);
+      console.error(`❌ [PhoneService.terminateCall] Hangup failed:`, e.message);
       return { ok: false, error: e.message };
     }
   }

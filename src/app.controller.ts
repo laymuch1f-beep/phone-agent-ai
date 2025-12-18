@@ -63,9 +63,21 @@ export class AppController {
 
       if (event.type === 'realtime.call.incoming' && event?.data?.call_id) {
         console.log('📱 Incoming call ID:', event.data.call_id);
-        return this.phoneService.handleIncomingCall(event.data.call_id);
+        
+        // 🔥 CRITICAL FIX: Added AWAIT and debugging logs
+        console.log('🟢 Calling phoneService.handleIncomingCall()...');
+        try {
+          const result = await this.phoneService.handleIncomingCall(event.data.call_id);
+          console.log('✅ phoneService returned:', result);
+          return result;
+        } catch (phoneError) {
+          console.error('💥 phoneService.handleIncomingCall() failed:', phoneError);
+          console.error('💥 Stack trace:', phoneError.stack);
+          throw phoneError;
+        }
       }
 
+      console.log('ℹ️ Non-call event, returning pong');
       return 'pong';
     } catch (e) {
       console.error('❌ Webhook error:', e);
