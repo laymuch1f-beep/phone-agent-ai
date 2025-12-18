@@ -10,7 +10,7 @@
     "npm": ">=9.0.0"
   },
   "scripts": {
-    "build": "npm exec -- nest build",
+    "build": "node ./node_modules/@nestjs/cli/bin/nest.js build",
     "prebuild": "node -e \"try{require('fs').rmSync('dist',{recursive:true,force:true});}catch(e){}\"",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "node dist/main.js",
