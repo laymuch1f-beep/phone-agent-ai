@@ -117,7 +117,7 @@ npm run lint
 ### Docker
 ```bash
 docker build -t phone-agent .
-docker run -p 3000:3000 --env-file .env phone-agent
+docker run -p 8080:8080 --env-file .env phone-agent
 ```
 
 ---
