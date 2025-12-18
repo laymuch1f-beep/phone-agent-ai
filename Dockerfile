@@ -3,6 +3,6 @@ WORKDIR /usr/src/app
 COPY package*.json ./ 
 RUN npm ci --include=dev 
 COPY . . 
-RUN npx nest build 
+RUN npx tsc -p tsconfig.json 
 EXPOSE 3000 
 CMD ["npm", "run", "start:prod"] 
