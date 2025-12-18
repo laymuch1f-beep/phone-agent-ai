@@ -52,39 +52,90 @@ export class AppController {
   async webhook(@Req() req: RawBodyRequest<Request>) {
     console.log('📞 Webhook received at:', new Date().toISOString());
     
+    const rawBody = req.rawBody!.toString();
+    console.log('📞 Raw body (first 500 chars):', rawBody.substring(0, 500));
+    
     try {
-      const event = await this.client.webhooks.unwrap(
-        req.rawBody!.toString(),
-        req.headers,
-        this.webhookSecret!,
-      );
-
-      console.log('✅ Webhook verified, event type:', event.type);
-
-      if (event.type === 'realtime.call.incoming' && event?.data?.call_id) {
-        console.log('📱 Incoming call ID:', event.data.call_id);
+      // Try to parse as JSON first
+      const body = JSON.parse(rawBody);
+      console.log('✅ Parsed as JSON');
+      console.log('✅ JSON keys:', Object.keys(body));
+      
+      // Check for Twilio format
+      if (body.CallSid) {
+        console.log('📱 TWILIO FORMAT - CallSid:', body.CallSid);
+        console.log('📱 CallStatus:', body.CallStatus);
         
-        // 🔥 CRITICAL FIX: Added AWAIT and debugging logs
-        console.log('🟢 Calling phoneService.handleIncomingCall()...');
+        if (body.CallStatus === 'ringing') {
+          console.log('🟢 Twilio incoming call detected');
+          console.log('🟢 Calling phoneService.handleIncomingCall()...');
+          
+          try {
+            const result = await this.phoneService.handleIncomingCall(body.CallSid);
+            console.log('✅ phoneService returned');
+            return result;
+          } catch (error) {
+            console.error('❌ phoneService failed:', error);
+            throw error;
+          }
+        }
+        
+        console.log('ℹ️ Twilio call with status:', body.CallStatus);
+        return 'pong';
+      }
+      
+      // Check for OpenAI format
+      if (body.type === 'realtime.call.incoming' && body.data?.call_id) {
+        console.log('🤖 OPENAI FORMAT - call_id:', body.data.call_id);
+        
         try {
-          const result = await this.phoneService.handleIncomingCall(event.data.call_id);
-          console.log('✅ phoneService returned:', result);
+          const result = await this.phoneService.handleIncomingCall(body.data.call_id);
+          console.log('✅ phoneService returned');
           return result;
-        } catch (phoneError) {
-          console.error('💥 phoneService.handleIncomingCall() failed:', phoneError);
-          console.error('💥 Stack trace:', phoneError.stack);
-          throw phoneError;
+        } catch (error) {
+          console.error('❌ phoneService failed:', error);
+          throw error;
         }
       }
-
-      console.log('ℹ️ Non-call event, returning pong');
+      
+      console.log('ℹ️ Unknown JSON format');
       return 'pong';
-    } catch (e) {
-      console.error('❌ Webhook error:', e);
-      if (e instanceof OpenAI.InvalidWebhookSignatureError) {
-        throw new UnauthorizedException('Invalid signature');
-      } else {
-        throw new BadRequestException(e.message);
+      
+    } catch (jsonError) {
+      // Not JSON, try OpenAI webhook verification
+      console.log('❌ Not valid JSON:', jsonError.message);
+      
+      if (!this.webhookSecret) {
+        console.error('❌ Missing OPENAI_WEBHOOK_VERIFICATION_KEY');
+        throw new BadRequestException('Invalid webhook format');
+      }
+      
+      try {
+        const event = await this.client.webhooks.unwrap(
+          rawBody,
+          req.headers,
+          this.webhookSecret,
+        );
+        
+        console.log('✅ OpenAI webhook verified, type:', event.type);
+        
+        if (event.type === 'realtime.call.incoming' && event.data?.call_id) {
+          try {
+            const result = await this.phoneService.handleIncomingCall(event.data.call_id);
+            console.log('✅ phoneService returned');
+            return result;
+          } catch (error) {
+            console.error('❌ phoneService failed:', error);
+            throw error;
+          }
+        }
+        
+        console.log('ℹ️ Non-call OpenAI event');
+        return 'pong';
+        
+      } catch (openaiError) {
+        console.error('❌ OpenAI verification failed:', openaiError.message);
+        throw new BadRequestException('Invalid webhook format');
       }
     }
   }
