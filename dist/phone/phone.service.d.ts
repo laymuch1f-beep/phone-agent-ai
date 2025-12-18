@@ -6,9 +6,20 @@ export declare class PhoneService {
     acceptCall(callId: string, opts?: {
         instructions?: string;
         model?: string;
-    }): Promise<void>;
+    }): Promise<any>;
     connect(callId: string): Promise<void>;
-    handleIncomingCall(callId: string): Promise<void>;
+    handleIncomingCall(callId: string): Promise<{
+        control: {
+            action: string;
+            parameters: {
+                voice: string;
+                instructions: string;
+                turn_detection: {
+                    type: string;
+                };
+            };
+        };
+    }>;
     terminateCall(callId: string): Promise<{
         ok: boolean;
         error?: undefined;

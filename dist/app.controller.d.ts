@@ -9,5 +9,16 @@ export declare class AppController {
     private readonly client;
     private readonly webhookSecret;
     getHello(): string;
-    webhook(req: RawBodyRequest<Request>): Promise<void | "pong">;
+    webhook(req: RawBodyRequest<Request>): Promise<{
+        control: {
+            action: string;
+            parameters: {
+                voice: string;
+                instructions: string;
+                turn_detection: {
+                    type: string;
+                };
+            };
+        };
+    } | "pong">;
 }

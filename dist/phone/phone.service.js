@@ -5,12 +5,15 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 var PhoneService_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.PhoneService = void 0;
 const common_1 = require("@nestjs/common");
-const ws_1 = require("ws");
-const axios_1 = require("axios");
+const ws_1 = __importDefault(require("ws"));
+const axios_1 = __importDefault(require("axios"));
 let PhoneService = PhoneService_1 = class PhoneService {
     constructor() {
         this.logger = new common_1.Logger(PhoneService_1.name);
@@ -36,17 +39,28 @@ let PhoneService = PhoneService_1 = class PhoneService {
                     speed: 1.0,
                 },
             },
-            instructions: opts?.instructions ||
-                `You are a helpful assistant for a restaurant, we always availability for bookings.
+            instructions: opts?.instructions || `You are a helpful assistant for a restaurant, we always availability for bookings.
          Speak clearly and briefly.
           Confirm understanding before taking actions.
           Your default language is English, unless a user uses a different language`,
         };
         try {
-            await axios_1.default.post(`https://api.openai.com/v1/realtime/calls/${callId}/accept`, body, { headers: { ...this.authHeader, 'Content-Type': 'application/json' } });
+            const response = await axios_1.default.post(`https://api.openai.com/v1/realtime/calls/${callId}/accept`, body, {
+                headers: {
+                    ...this.authHeader,
+                    'Content-Type': 'application/json'
+                }
+            });
+            this.logger.log(`✅ Call ${callId} accepted successfully`);
+            return response.data;
         }
         catch (e) {
-            console.log('Error yacho', e.message);
+            this.logger.error(`❌ Error accepting call ${callId}:`, e.message);
+            if (e.response) {
+                this.logger.error('Response data:', e.response.data);
+                this.logger.error('Response status:', e.response.status);
+            }
+            throw e;
         }
     }
     async connect(callId) {
@@ -56,7 +70,7 @@ let PhoneService = PhoneService_1 = class PhoneService {
         });
         this.sockets.set(callId, ws);
         ws.on('open', () => {
-            this.logger.log(`WS open for call ${callId}`);
+            this.logger.log(`🔌 WS open for call ${callId}`);
             const responseCreate = {
                 type: 'response.create',
                 response: {
@@ -71,25 +85,47 @@ let PhoneService = PhoneService_1 = class PhoneService {
         ws.on('message', (data) => {
             try {
                 const text = data.toString();
-                this.logger.debug(`WS message (${callId}): ${text}`);
+                this.logger.debug(`📨 WS message (${callId}): ${text}`);
             }
             catch (e) {
                 this.logger.error(`Failed to parse WS message for ${callId}`, e);
             }
         });
         ws.on('close', (code, reason) => {
-            this.logger.log(`WS closed for ${callId}: code=${code} reason=${reason.toString()}`);
+            this.logger.log(`🔌 WS closed for ${callId}: code=${code} reason=${reason.toString()}`);
             this.sockets.delete(callId);
         });
         ws.on('error', (err) => {
-            this.logger.error(`WS error for ${callId}: ${err.message}`, err.stack);
+            this.logger.error(`❌ WS error for ${callId}: ${err.message}`);
         });
     }
     async handleIncomingCall(callId) {
-        await this.acceptCall(callId);
-        setImmediate(() => {
-            this.connect(callId).catch((e) => this.logger.error(`Failed to connect WS for ${callId}: ${e.message}`, e.stack));
-        });
+        this.logger.log(`📞 Handling incoming call: ${callId}`);
+        try {
+            await this.acceptCall(callId);
+            setImmediate(() => {
+                this.connect(callId).catch((e) => this.logger.error(`❌ Failed to connect WS for ${callId}: ${e.message}`));
+            });
+            return {
+                control: {
+                    action: 'accept',
+                    parameters: {
+                        voice: 'coral',
+                        instructions: `You are a helpful assistant for a restaurant, we always availability for bookings.
+               Speak clearly and briefly.
+                Confirm understanding before taking actions.
+                Your default language is English, unless a user uses a different language`,
+                        turn_detection: {
+                            type: 'server_vad',
+                        }
+                    }
+                }
+            };
+        }
+        catch (error) {
+            this.logger.error(`❌ Failed to handle call ${callId}:`, error);
+            throw error;
+        }
     }
     async terminateCall(callId) {
         try {
@@ -99,10 +135,11 @@ let PhoneService = PhoneService_1 = class PhoneService {
                     'Content-Type': 'application/json',
                 },
             });
+            this.logger.log(`✅ Call ${callId} terminated`);
             return { ok: true };
         }
         catch (e) {
-            console.error('Hangup failed', e.response?.status, e.response?.data ?? e.message);
+            this.logger.error(`❌ Hangup failed for ${callId}:`, e.response?.status, e.response?.data ?? e.message);
             return { ok: false, error: e.response?.data ?? e.message };
         }
     }

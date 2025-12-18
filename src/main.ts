@@ -6,13 +6,13 @@ async function bootstrap() {
     rawBody: true,
   });
   
-  // Use PORT from environment or default to 3000
-  const port = process.env.PORT || 3000;
+  // Use PORT from environment or default to 8080 (to match your logs)
+  const port = process.env.PORT || 8080;
   
-  // CRITICAL: Add '0.0.0.0' as the second parameter
   await app.listen(port, '0.0.0.0');
   
   console.log(`🚀 Application is running on port: ${port}`);
   console.log(`🌐 Accessible at: http://0.0.0.0:${port}`);
+  console.log(`📋 Using PORT from env: ${process.env.PORT}`);
 }
 bootstrap();
