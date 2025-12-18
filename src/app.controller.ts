@@ -8,29 +8,52 @@ import {
   Get,
 } from '@nestjs/common';
 import { Response, Request } from 'express';
-import { PhoneService } from './phone/phone.service';
 
 @Controller()
 export class AppController {
-  constructor(private readonly phoneService: PhoneService) {}
-
   @Get()
   getHello(): string {
     return 'Realtime AI Phone Agent is running!';
   }
 
   @Get('health')
-  healthCheck(): { status: string; timestamp: string } {
+  @HttpCode(200)
+  healthCheck(): { status: string; timestamp: string; uptime: number } {
     return {
       status: 'ok',
       timestamp: new Date().toISOString(),
+      uptime: process.uptime()
     };
   }
 
-  /**
-   * ✅ CRITICAL: This is the endpoint Twilio calls when someone dials your number
-   * Twilio sends application/x-www-form-urlencoded, not JSON!
-   */
+  @Get('ready')
+  @HttpCode(200)
+  readinessCheck(): { status: string; checks: any } {
+    const checks = {
+      app: 'running',
+      timestamp: new Date().toISOString(),
+      nodeVersion: process.version,
+      platform: process.platform,
+      memory: {
+        rss: `${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(process.memoryUsage().heapTotal / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB`,
+      },
+      env: {
+        port: process.env.PORT || '3000',
+        nodeEnv: process.env.NODE_ENV || 'development',
+        openaiKey: process.env.OPENAI_API_KEY ? 'set' : 'not set',
+        twilioSid: process.env.TWILIO_ACCOUNT_SID ? 'set' : 'not set',
+        railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN || 'not set',
+      }
+    };
+    
+    return {
+      status: 'ready',
+      checks
+    };
+  }
+
   @Post('incoming-call')
   @HttpCode(200)
   handleIncomingCall(
@@ -42,22 +65,31 @@ export class AppController {
     console.log('📱 CallSid:', body.CallSid);
     console.log('📱 From:', body.From);
     console.log('📱 To:', body.To);
-    console.log('📱 Direction:', body.Direction);
     console.log('📱 CallStatus:', body.CallStatus);
 
-    // Get your Railway public URL
-    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 
-                   process.env.RAILWAY_STATIC_URL ||
-                   `${req.protocol}://${req.get('host')}`;
+    // Get Railway public URL
+    let baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 
+                 process.env.RAILWAY_STATIC_URL;
+    
+    if (!baseUrl) {
+      // Fallback to request host
+      const host = req.get('host');
+      const protocol = req.protocol;
+      baseUrl = `${protocol}://${host}`;
+    }
+    
+    // Clean the URL for WebSocket
+    const cleanUrl = baseUrl.replace(/^https?:\/\//, '');
     
     console.log('🌐 Base URL:', baseUrl);
+    console.log('🔗 WebSocket URL: wss://' + cleanUrl + '/media-stream');
 
-    // ✅ Generate proper TwiML response for Twilio
+    // Generate TwiML response
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say voice="alice">Hello! Connecting you to the AI assistant now.</Say>
   <Connect>
-    <Stream url="wss://${baseUrl.replace(/^https?:\/\//, '')}/media-stream">
+    <Stream url="wss://${cleanUrl}/media-stream">
       <Parameter name="callSid" value="${body.CallSid}" />
       <Parameter name="from" value="${body.From}" />
       <Parameter name="to" value="${body.To}" />
@@ -66,49 +98,110 @@ export class AppController {
 </Response>`;
 
     console.log('✅ Sending TwiML response to Twilio');
-    console.log('📄 TwiML:', twiml);
     
     res.type('text/xml');
     res.send(twiml);
   }
 
-  /**
-   * Handle OpenAI webhooks (separate from Twilio)
-   */
   @Post('webhook')
   @HttpCode(200)
   async handleOpenAIWebhook(
     @Body() body: any,
-    @Req() req: any,
   ): Promise<any> {
     console.log('🤖 OpenAI webhook received');
     
-    // Check if it's from OpenAI Realtime API
+    // Simple response for OpenAI Realtime API
     if (body.type === 'realtime.call.incoming') {
       const callId = body.data?.call_id || body.data?.id;
-      if (callId) {
-        console.log(`📞 OpenAI Realtime call: ${callId}`);
-        return await this.phoneService.handleIncomingCall(callId);
-      }
+      console.log(`📞 OpenAI call detected: ${callId}`);
+      
+      return {
+        control: {
+          action: 'accept',
+          parameters: {
+            voice: 'alloy',
+            instructions: 'Hello! I am an AI assistant. How can I help you today?',
+            turn_detection: { type: 'server_vad' }
+          }
+        }
+      };
     }
     
-    return { received: true };
+    return { 
+      received: true, 
+      message: 'Webhook processed',
+      timestamp: new Date().toISOString()
+    };
   }
 
-  /**
-   * Status callback for Twilio call events
-   */
   @Post('status-callback')
   @HttpCode(200)
   handleStatusCallback(@Body() body: any): any {
-    console.log('📊 Twilio status callback:', body.CallStatus);
-    console.log('📱 CallSid:', body.CallSid);
+    console.log('📊 Twilio status callback:', {
+      callSid: body.CallSid,
+      status: body.CallStatus,
+      direction: body.Direction,
+      timestamp: new Date().toISOString()
+    });
     
-    if (body.CallStatus === 'completed' || body.CallStatus === 'failed') {
-      console.log(`📞 Call ${body.CallSid} ended with status: ${body.CallStatus}`);
-      // Clean up resources if needed
-    }
+    return { 
+      received: true,
+      processed: true,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  @Get('test')
+  testEndpoint(): { 
+    message: string; 
+    timestamp: string; 
+    endpoints: string[];
+    env: any 
+  } {
+    return {
+      message: 'API is working',
+      timestamp: new Date().toISOString(),
+      endpoints: [
+        '/health - Health check',
+        '/ready - Readiness check',
+        '/incoming-call - Twilio webhook (POST)',
+        '/webhook - OpenAI webhook (POST)',
+        '/status-callback - Twilio status (POST)',
+        '/test - Test endpoint'
+      ],
+      env: {
+        port: process.env.PORT || '3000',
+        nodeEnv: process.env.NODE_ENV || 'development',
+        railwayDomain: process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost',
+        openaiConfigured: !!process.env.OPENAI_API_KEY,
+        twilioConfigured: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN)
+      }
+    };
+  }
+
+  @Post('test-call')
+  @HttpCode(200)
+  testCallSimulation(
+    @Res() res: Response,
+  ): void {
+    console.log('🧪 Testing Twilio call simulation');
     
-    return { received: true };
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'localhost:3000';
+    const cleanUrl = baseUrl.replace(/^https?:\/\//, '');
+    
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Test successful! Your webhook is working correctly.</Say>
+  <Connect>
+    <Stream url="wss://${cleanUrl}/media-stream">
+      <Parameter name="callSid" value="test_${Date.now()}" />
+      <Parameter name="from" value="+15551234567" />
+      <Parameter name="to" value="+15557654321" />
+    </Stream>
+  </Connect>
+</Response>`;
+
+    res.type('text/xml');
+    res.send(twiml);
   }
 }
