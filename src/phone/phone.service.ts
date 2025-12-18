@@ -1,12 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import WebSocket from 'ws';  // ⭐ CORRECT with esModuleInterop: true
 import axios from 'axios';
+
+// Solution 1: Type assertion for require()
+const WebSocket = require('ws') as any;
 
 @Injectable()
 export class PhoneService {
   private readonly logger = new Logger(PhoneService.name);
   private readonly apiKey = process.env.OPENAI_API_KEY!;
-  private sockets = new Map<string, WebSocket>();
+  private sockets = new Map<string, any>();
 
   private get authHeader() {
     return { Authorization: `Bearer ${this.apiKey}` };
@@ -63,28 +65,19 @@ export class PhoneService {
   async connect(callId: string) {
     const url = `wss://api.openai.com/v1/realtime?call_id=${encodeURIComponent(callId)}`;
 
-    const ws = new WebSocket(url, {
+    // Type assertion here
+    const ws: any = new WebSocket(url, {
       headers: this.authHeader,
     });
 
     this.sockets.set(callId, ws);
 
     ws.on('open', () => {
-      this.logger.log(`🔌 WS open for call ${callId}`);
-
-      const responseCreate = {
-        type: 'response.create',
-        response: {
-          instructions: `Greet the user and ask them what they need assistance with.
-             Use English as a default language.
-             For booking cancellation, ask for booking reference and name only.
-             If a user is silent for more than 3 seconds, ask if they are still there or if they need help with anything`,
-        },
-      };
-      ws.send(JSON.stringify(responseCreate));
+      this.logger.log(`✅ WebSocket OPEN for call ${callId}`);
+      // NO greeting - OpenAI handles it
     });
 
-    ws.on('message', (data) => {
+    ws.on('message', (data: any) => {
       try {
         const text = data.toString();
         this.logger.debug(`📨 WS message (${callId}): ${text}`);
@@ -93,14 +86,14 @@ export class PhoneService {
       }
     });
 
-    ws.on('close', (code, reason) => {
+    ws.on('close', (code: number, reason: Buffer) => {
       this.logger.log(
         `🔌 WS closed for ${callId}: code=${code} reason=${reason.toString()}`,
       );
       this.sockets.delete(callId);
     });
 
-    ws.on('error', (err) => {
+    ws.on('error', (err: any) => {
       this.logger.error(`❌ WS error for ${callId}: ${err.message}`);
     });
   }
@@ -109,19 +102,16 @@ export class PhoneService {
     this.logger.log(`📞 Handling incoming call: ${callId}`);
     
     try {
-      // 1. Accept the call via OpenAI API
       await this.acceptCall(callId);
       
-      // 2. Start WebSocket connection in background
       setImmediate(() => {
-        this.connect(callId).catch((e) =>
+        this.connect(callId).catch((e: any) =>
           this.logger.error(
             `❌ Failed to connect WS for ${callId}: ${e.message}`,
           ),
         );
       });
 
-      // 3. ⭐ CRITICAL: Return expected response to OpenAI webhook
       return {
         control: {
           action: 'accept',
@@ -137,9 +127,9 @@ export class PhoneService {
           }
         }
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`❌ Failed to handle call ${callId}:`, error);
-      throw error; // Let the controller handle the error
+      throw error;
     }
   }
 
@@ -169,7 +159,7 @@ export class PhoneService {
 
   close(callId: string) {
     const sock = this.sockets.get(callId);
-    if (sock && sock.readyState === WebSocket.OPEN) sock.close(1000, 'done');
+    if (sock && sock.readyState === 1) sock.close(1000, 'done'); // 1 = OPEN
     this.sockets.delete(callId);
   }
 }
