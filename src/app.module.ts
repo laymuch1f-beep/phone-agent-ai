@@ -9,8 +9,18 @@ import { VoiceModule } from './voice/voice.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PhoneModule, AIModule, SearchModule, DomainModule, VoiceModule, ConfigModule.forRoot()],
+  imports: [
+    PhoneModule, 
+    AIModule, 
+    SearchModule, 
+    DomainModule, 
+    VoiceModule, 
+    ConfigModule.forRoot({
+      isGlobal: true,
+    })
+  ],
   controllers: [AppController],
   providers: [AppService],
+  // Remove MediaStreamGateway from here if not properly imported
 })
 export class AppModule {}
